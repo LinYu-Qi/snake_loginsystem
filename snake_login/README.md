@@ -1,4 +1,7 @@
-# Project Name: Simple Login System
+# Project Name: Snake Game with Login System
 
 ## Description
+
+## References
+
 
