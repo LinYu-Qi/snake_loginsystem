@@ -6,16 +6,25 @@ if (localStorage.getItem("users") != null) {
 }
 
 
-
 var canvas = document.getElementById('game');
-var context = canvas.getContext('2d');
+canvas.width = 480; // Set the width of the canvas
+canvas.height = 480; // Set the height of the canvas
 
-var grid = 16;
+
+var context = canvas.getContext('2d');
+ // Set the transparency level for the background
+
+var grid = 32;
 var count = 0;
-  
+var maxApples=5;
+var start_length=4;
+var start_position_x=160; // Ensure this is a multiple of grid size
+var start_position_y=160; // Ensure this is a multiple of grid size
+
+
 var snake = {
-  x: 160,
-  y: 160,
+  x: start_position_x,
+  y: start_position_y,
   
   // snake velocity. moves one grid length every frame in either the x or y direction
   dx: grid,
@@ -24,15 +33,18 @@ var snake = {
   // keep track of all grids the snake body occupies
   cells: [],
 
-  
   // length of the snake. grows when eating an apple
-  maxCells: 4
+  maxCells: start_length
 };
-var apples = {
-    apple:[],
-    maxApples:10
 
+var apples = {
+    apple:[],    
 };
+
+var paused = false; // Variable to track the paused state
+
+// add apple 
+addApple()
 
 // get random whole numbers in a specific range
 // @see https://stackoverflow.com/a/1527820/2124254
@@ -40,16 +52,80 @@ function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min)) + min;
 }
 //get random color to draw apples 
-function getRandonColoor () {
+function getRandomColor () {
     const randomColor = Math.floor(Math.random()*16777215).toString(16);
     return "#" + randomColor;
 }
+
+function drawApple() {
+  for (var i = 0; i < apples.apple.length; i++) {
+    context.fillStyle = apples.apple[i].color;
+    context.fillRect(apples.apple[i].x, apples.apple[i].y, grid - 1, grid - 1);
+  }
+}
+
+// place apple randomly on the grid
+function addApple() {
+  while (apples.apple.length < maxApples) {
+    let newApple = {
+      x: getRandomInt(0, canvas.width / grid) * grid,
+      y: getRandomInt(0, canvas.height / grid) * grid,
+      color:getRandomColor()
+    };
+
+    // Ensure the new apple is not placed on the snake
+    let isOnSnake = snake.cells.some(cell => cell.x === newApple.x && cell.y === newApple.y);
+
+    if (!isOnSnake) {
+      apples.apple.push(newApple);
+    }
+  }
+}
+
+
+// Function to handle game over
+function gameOver() {
+  const score = snake.maxCells - start_length;
+  const highestScore = users[localStorage.getItem("user_i")].highest_score;
+  const message = `Game Over! Your score: ${score}\n\n` +
+                  `Highest score: ${highestScore}\n\n` +
+                  `Press OK to restart the game.`;
+
+  alert(message);
+
+  // Reset the game state
+  snake.x = start_position_x;
+  snake.y = start_position_y;
+  snake.cells = [];
+  snake.maxCells = start_length;
+  snake.dx = grid;
+  snake.dy = 0;
+
+  // Place the first apple
+  addApple();
+}
+
+// Function to toggle pause state
+function togglePause() {
+  paused = !paused;
+} 
+
+// Event listener for keydown event to toggle pause on spacebar press
+document.addEventListener('keydown', function(event) {
+  if (event.code === 'Space') {
+    togglePause();
+  }
+});
 
 // game loop
 function loop() {
   requestAnimationFrame(loop);
 
-  // slow game loop to 15 fps instead of 60 (60/15 = 4)
+  if (paused) {
+    return; // Skip the game loop if the game is paused
+  }
+
+  // slow game loop to 6 fps instead of 60 (60/6 = 4)
   if (++count < 10) {
     return;
   }
@@ -84,21 +160,12 @@ function loop() {
   if (snake.cells.length > snake.maxCells) {
     snake.cells.pop();
   }
+
   
 
-  // add apple 
-  if (apples.apple.length < apples.maxApples) {
-    apples.apple.unshift({x: getRandomInt(0, 25) * grid, y: getRandomInt(0, 25) * grid,color:getRandonColoor()});
-  }
-
-
-  // draw apple
-  for (var i = 0; i < apples.apple.length; i++) {
-    context.fillStyle =apples.apple[i].color ;
-    context.fillRect(apples.apple[i].x, apples.apple[i].y, grid-1, grid-1);
-    }
+  // draw apple on the canvas
+  drawApple()
   
-
   // draw snake one cell at a time
  
   snake.cells.forEach(function(cell, index) {
@@ -110,39 +177,35 @@ function loop() {
     // drawing 1 px smaller than the grid creates a grid effect in the snake body so you can see how long it is
     context.fillRect(cell.x, cell.y, grid-1, grid-1);  
 
-  
-
     // check collision with all cells after this one (modified bubble sort)
     for (var i = index + 1; i < snake.cells.length; i++) {
       // snake occupies same space as a body part. reset game
       if (cell.x === snake.cells[i].x && cell.y === snake.cells[i].y) {
-        snake.x = 160;
-        snake.y = 160;
-        snake.cells = [];
-        snake.maxCells = 4;
-        snake.dx = grid;
-        snake.dy = 0;
+        // Reset the game state
+        gameOver()
       }
     }
   });
+
 
    // snake ate apple (need to move out of cell recursion)
   for (var i=0; i<apples.apple.length;i++){
     if (snake.x === apples.apple[i].x && snake.y === apples.apple[i].y) {
         snake.maxCells++;
 
-        // canvas is 400x400 which is 25x25 grids generate new apple
-        apples.apple[i].x = getRandomInt(0, 25) * grid;
-        apples.apple[i].y = getRandomInt(0, 25) * grid;
-        apples.apple[i].color=getRandonColoor()
+        // remove the apple and add a new one
+        apples.apple[i].x = getRandomInt(0, canvas.width / grid) * grid;
+        apples.apple[i].y = getRandomInt(0, canvas.height / grid) * grid;
+        apples.apple[i].color=getRandomColor()
+   
 
         //update current score AND highest score
-        document.getElementById("current_score").textContent="Your Current Score: "+snake.maxCells;
-        if (snake.maxCells>users[localStorage.getItem("user_i")].highest_score){
+        document.getElementById("current_score").textContent="Current Score: "+(snake.maxCells-start_length);
+        if (snake.maxCells-start_length>users[localStorage.getItem("user_i")].highest_score){
           //update "users" variable store in browser 
-          users[localStorage.getItem("user_i")].highest_score=snake.maxCells
+          users[localStorage.getItem("user_i")].highest_score=snake.maxCells-start_length
           localStorage.setItem("users", JSON.stringify(users));
-          document.getElementById("highest_score").textContent="Your Highest Score: "+snake.maxCells;
+          document.getElementById("highest_score").textContent=user_name+"'s Highest Score: "+users[localStorage.getItem("user_i")].highest_score;
         }
       }
  
@@ -179,6 +242,12 @@ document.addEventListener('keydown', function(e) {
 });
 
 //display highest score
-document.getElementById("highest_score").textContent="Your Highest Score: "+users[localStorage.getItem("user_i")].highest_score;
+var user_name=localStorage.getItem("userName")
+document.getElementById("highest_score").textContent=user_name+"'s Highest Score: "+users[localStorage.getItem("user_i")].highest_score;
+
+// Display hint at the start of the game
+alert("Hint: Use arrow keys to move the snake.\nPress Space to pause the game.")
+
+
 // start the game
 requestAnimationFrame(loop);
